@@ -35,34 +35,41 @@ export function UploadZone({ onUpload, userId, onBack }: UploadZoneProps) {
   const parseFlexibleDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     
+    // Clean the date string (sometimes banks add extra spaces or chars)
+    const cleanDate = dateStr.trim().replace(/\s+/g, ' ');
+    
     // Try common formats
     const formats = [
       'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH.mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'dd-MM-yyyy HH.mm',
       'dd-MM-yyyy',
       'yyyy-MM-dd HH:mm:ss',
       'yyyy-MM-dd',
       'MM/dd/yyyy HH:mm:ss',
       'MM/dd/yyyy',
       'dd/MM/yyyy HH:mm:ss',
+      'dd/MM/yyyy HH.mm',
       'dd/MM/yyyy',
     ];
 
     for (const fmt of formats) {
       try {
-        const parsed = parse(dateStr, fmt, new Date());
+        const parsed = parse(cleanDate, fmt, new Date());
         if (isValid(parsed)) return parsed;
       } catch (e) {}
     }
 
     // Fallback to native Date
-    const native = new Date(dateStr);
+    const native = new Date(cleanDate.replace(/\./g, ':')); // Try replacing dots with colons for native parser
     if (isValid(native)) return native;
 
     return null;
   };
 
   const findHeaderRow = (rows: any[][]): { headerRow: string[], dataRows: any[][] } => {
-    const keywords = ['date', 'description', 'amount', 'debit', 'credit', 'narration'];
+    const keywords = ['date', 'description', 'amount', 'debit', 'credit', 'narration', 'particulars', 'txn', 'value'];
     
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -73,7 +80,7 @@ export function UploadZone({ onUpload, userId, onBack }: UploadZoneProps) {
       
       if (hasKeywords) {
         return {
-          headerRow: row.map(cell => String(cell).trim()),
+          headerRow: row.map(cell => String(cell || '').trim()),
           dataRows: rows.slice(i + 1)
         };
       }
@@ -119,14 +126,26 @@ export function UploadZone({ onUpload, userId, onBack }: UploadZoneProps) {
         const mappedTransactions = dataRows.map(row => {
           const rowObj: any = {};
           headerRow.forEach((header, index) => {
-            rowObj[header] = row[index];
+            if (header) rowObj[header.toLowerCase()] = row[index];
           });
 
-          const dateStr = rowObj['Transaction Date'] || rowObj['Date'] || rowObj['date'] || '';
-          const description = rowObj['Description'] || rowObj['description'] || rowObj['Narration'] || rowObj['narration'] || '';
-          const debit = parseFloat(String(rowObj['Debit'] || rowObj['debit'] || '0').replace(/,/g, ''));
-          const credit = parseFloat(String(rowObj['Credit'] || rowObj['credit'] || '0').replace(/,/g, ''));
-          const amountVal = parseFloat(String(rowObj['Amount'] || rowObj['amount'] || '0').replace(/,/g, ''));
+          const getVal = (keys: string[]) => {
+            for (const key of keys) {
+              const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().includes(key.toLowerCase()));
+              if (foundKey) return rowObj[foundKey];
+            }
+            return null;
+          };
+
+          const dateStr = getVal(['date', 'txn date', 'value date', 'transaction date']) || '';
+          const description = getVal(['description', 'narration', 'particulars', 'txn details', 'remarks']) || '';
+          const debitStr = String(getVal(['debit', 'withdrawal', 'dr']) || '0').replace(/,/g, '');
+          const creditStr = String(getVal(['credit', 'deposit', 'cr']) || '0').replace(/,/g, '');
+          const amountStr = String(getVal(['amount', 'value', 'txn amount']) || '0').replace(/,/g, '');
+          
+          const debit = parseFloat(debitStr);
+          const credit = parseFloat(creditStr);
+          const amountVal = parseFloat(amountStr);
           
           let amount = amountVal;
           let type: 'credit' | 'debit' = 'debit';
@@ -137,12 +156,19 @@ export function UploadZone({ onUpload, userId, onBack }: UploadZoneProps) {
           } else if (credit > 0) {
             amount = credit;
             type = 'credit';
-          } else if (rowObj['Type'] || rowObj['type']) {
-            type = String(rowObj['Type'] || rowObj['type']).toLowerCase().includes('cr') ? 'credit' : 'debit';
+          } else if (getVal(['type'])) {
+            const typeStr = String(getVal(['type'])).toLowerCase();
+            type = typeStr.includes('cr') || typeStr.includes('credit') || typeStr.includes('deposit') ? 'credit' : 'debit';
+          } else if (amountVal < 0) {
+            amount = Math.abs(amountVal);
+            type = 'debit';
+          } else if (amountVal > 0) {
+            type = 'credit'; // Default to credit if positive and no other info? Or debit?
+            // Usually if it's just one amount column, negative is debit, positive is credit.
           }
 
           const parsedDate = parseFlexibleDate(String(dateStr));
-          if (!parsedDate) return null;
+          if (!parsedDate || !description) return null;
 
           return {
             userId,

@@ -21,26 +21,29 @@
       "description": "A single financial transaction",
       "type": "object",
       "properties": {
+        "userId": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "description": { "type": "string" },
         "amount": { "type": "number" },
         "category": { "type": "string" },
-        "type": { "type": "string", "enum": ["income", "expense"] },
+        "subCategory": { "type": "string" },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
         "bank": { "type": "string" },
-        "raw": { "type": "string" }
+        "rawDescription": { "type": "string" }
       },
-      "required": ["date", "description", "amount", "category", "type"]
+      "required": ["userId", "date", "description", "amount", "category", "type", "rawDescription"]
     },
     "ChatMessage": {
       "title": "Chat Message",
       "description": "A message in the chat history",
       "type": "object",
       "properties": {
-        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model", "assistant"] },
         "content": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["role", "content", "timestamp"]
+      "required": ["userId", "role", "content", "timestamp"]
     }
   },
   "firestore": {

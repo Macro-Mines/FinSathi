@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Syne:wght@600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-heading: "Plus Jakarta Sans", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-accent: "Syne", sans-serif;
+
+  /* Theme Tokens */
+  --color-surface-base: var(--surface-base);
+  --color-surface-card: var(--surface-card);
+  --color-surface-raised: var(--surface-raised);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-glow: var(--brand-glow);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-debit-red: var(--debit-red);
+  --color-credit-green: var(--credit-green);
+  --color-warning-amber: var(--warning-amber);
+}
+
+@layer base {
+  :root {
+    --surface-base: #FFFFFF;
+    --surface-card: #F8FAFC;
+    --surface-raised: #F1F5F9;
+    --brand-primary: #4F46E5;
+    --brand-glow: #0EA5E9;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --debit-red: #E11D48;
+    --credit-green: #059669;
+    --warning-amber: #D97706;
+    
+    --glass-bg: rgba(255, 255, 255, 0.6);
+    --glass-border: rgba(0, 0, 0, 0.05);
+  }
+
+  .dark {
+    --surface-base: #0F172A;
+    --surface-card: #1E293B;
+    --surface-raised: #334155;
+    --brand-primary: #4F46E5;
+    --brand-glow: #06B6D4;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --debit-red: #F43F5E;
+    --credit-green: #10B981;
+    --warning-amber: #F59E0B;
+
+    --glass-bg: rgba(30, 41, 59, 0.6);
+    --glass-border: rgba(148, 163, 184, 0.15);
+  }
+
+  body {
+    @apply font-sans antialiased bg-surface-base text-text-primary;
+    transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-[20px] bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-[0_8px_32px_rgba(0,0,0,0.1)];
+  }
+  
+  .dark .glass-card {
+    @apply shadow-[0_8px_32px_rgba(0,0,0,0.37)];
+  }
+
+  .brand-gradient {
+    @apply bg-gradient-to-r from-[#4F46E5] to-[#7C3AED];
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

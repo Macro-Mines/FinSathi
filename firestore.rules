@@ -12,6 +12,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "rajabhinavgalaxyj7@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
@@ -29,20 +35,21 @@ service cloud.firestore {
     // ===============================================================
     match /users/{userId} {
       function isValidProfile(data) {
-        return data.keys().hasAll(['email', 'incomeBracket']) &&
+        return data.keys().hasAll(['email']) &&
                data.email is string && isValidEmail(data.email) &&
-               data.incomeBracket is string &&
-               (!('displayName' in data) || data.displayName is string) &&
-               (!('photoURL' in data) || data.photoURL is string) &&
-               (!('primaryBank' in data) || data.primaryBank is string) &&
-               (!('investmentStyle' in data) || data.investmentStyle is string) &&
-               (!('financialGoals' in data) || data.financialGoals is list);
+               (!('incomeBracket' in data) || (data.incomeBracket is string && data.incomeBracket.size() < 50)) &&
+               (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+               (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500)) &&
+               (!('primaryBank' in data) || (data.primaryBank is string && data.primaryBank.size() < 100)) &&
+               (!('investmentStyle' in data) || (data.investmentStyle is string && data.investmentStyle.size() < 100)) &&
+               (!('financialGoals' in data) || (data.financialGoals is list && data.financialGoals.size() < 20)) &&
+               (!('preferredLanguage' in data) || (data.preferredLanguage is string && data.preferredLanguage.size() < 50));
       }
 
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidProfile(request.resource.data);
-      allow update: if isOwner(userId) && isValidProfile(request.resource.data);
-      allow delete: if isOwner(userId);
+      allow update: if (isOwner(userId) && isValidProfile(request.resource.data)) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
 
       // ===============================================================
       // Transactions
@@ -51,16 +58,18 @@ service cloud.firestore {
         function isValidTransaction(data) {
           return data.keys().hasAll(['date', 'description', 'amount', 'category', 'type']) &&
                  isValidDate(data.date) &&
-                 data.description is string && data.description.size() > 0 &&
+                 data.description is string && data.description.size() > 0 && data.description.size() < 500 &&
                  data.amount is number &&
-                 data.category is string &&
-                 data.type in ['income', 'expense'];
+                 data.category is string && data.category.size() < 100 &&
+                 data.type in ['income', 'expense'] &&
+                 (!('bank' in data) || (data.bank is string && data.bank.size() < 100)) &&
+                 (!('raw' in data) || (data.raw is string && data.raw.size() < 2000));
         }
 
-        allow read: if isOwner(userId);
+        allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
-        allow update: if isOwner(userId) && isValidTransaction(request.resource.data);
-        allow delete: if isOwner(userId);
+        allow update: if (isOwner(userId) && isValidTransaction(request.resource.data)) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
       }
 
       // ===============================================================
@@ -70,14 +79,14 @@ service cloud.firestore {
         function isValidChat(data) {
           return data.keys().hasAll(['role', 'content', 'timestamp']) &&
                  data.role in ['user', 'assistant'] &&
-                 data.content is string && data.content.size() > 0 &&
+                 data.content is string && data.content.size() > 0 && data.content.size() < 10000 &&
                  isValidDateTime(data.timestamp);
         }
 
-        allow read: if isOwner(userId);
+        allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidChat(request.resource.data);
-        allow update: if isOwner(userId) && isValidChat(request.resource.data);
-        allow delete: if isOwner(userId);
+        allow update: if (isOwner(userId) && isValidChat(request.resource.data)) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
       }
     }
   }

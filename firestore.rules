@@ -2,45 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: userId (Firebase Auth UID)
-    // Fields:
-    //   - uid: string (required)
-    //   - email: string (required)
-    //   - displayName: string (optional)
-    //   - incomeBracket: string (optional)
-    //   - goals: list (optional)
-    //   - preferredLanguage: string (optional)
-    //   - isZeroRetention: bool (optional)
-    //   - createdAt: timestamp (required)
-    //
-    // Collection: users/{userId}/transactions
-    // Document ID: transactionId
-    // Fields:
-    //   - userId: string (required)
-    //   - date: string (required, YYYY-MM-DD)
-    //   - description: string (required)
-    //   - amount: number (required)
-    //   - type: string (required, 'credit' or 'debit')
-    //   - category: string (required)
-    //   - subCategory: string (optional)
-    //   - bank: string (optional)
-    //   - rawDescription: string (required)
-    //
-    // Collection: users/{userId}/chats
-    // Document ID: chatId
-    // Fields:
-    //   - userId: string (required)
-    //   - role: string (required, 'user' or 'model')
-    //   - content: string (required)
-    //   - timestamp: timestamp (required)
-    //
-    // ===============================================================
-
     // Helper Functions
+    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -49,68 +12,72 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "rajabhinavgalaxyj7@gmail.com" && request.auth.token.email_verified == true));
-    }
-
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
-    function isValidDateString(dateStr) {
-      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    function isValidDate(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*");
     }
 
-    // Domain Validators
-    function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email']) &&
-             data.uid is string && data.uid.size() > 0 &&
-             isValidEmail(data.email) &&
-             (!('incomeBracket' in data) || data.incomeBracket is string) &&
-             (!('goals' in data) || data.goals is list) &&
-             (!('preferredLanguage' in data) || data.preferredLanguage is string) &&
-             (!('isZeroRetention' in data) || data.isZeroRetention is bool);
+    function isValidDateTime(dateTimeStr) {
+      return dateTimeStr is string && dateTimeStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*");
     }
 
-    function isValidTransaction(data) {
-      return data.keys().hasAll(['userId', 'date', 'amount', 'type', 'description', 'category', 'rawDescription']) &&
-             data.userId is string && data.userId.size() > 0 &&
-             isValidDateString(data.date) &&
-             data.amount is number &&
-             data.type in ['credit', 'debit'] &&
-             data.description is string && data.description.size() < 500 &&
-             data.category is string &&
-             data.rawDescription is string && data.rawDescription.size() < 1000;
-    }
-
-    function isValidChatMessage(data) {
-      return data.keys().hasAll(['userId', 'role', 'content', 'timestamp']) &&
-             data.userId is string && data.userId.size() > 0 &&
-             data.role in ['user', 'model'] &&
-             data.content is string && data.content.size() < 5000;
-    }
-
-    // Match Rules
+    // ===============================================================
+    // User Profiles
+    // ===============================================================
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
-      allow delete: if isOwner(userId) || isAdmin();
-
-      match /transactions/{transactionId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
-        allow update: if isOwner(userId) && isValidTransaction(request.resource.data);
-        allow delete: if isOwner(userId) || isAdmin();
+      function isValidProfile(data) {
+        return data.keys().hasAll(['email', 'incomeBracket']) &&
+               data.email is string && isValidEmail(data.email) &&
+               data.incomeBracket is string &&
+               (!('displayName' in data) || data.displayName is string) &&
+               (!('photoURL' in data) || data.photoURL is string) &&
+               (!('primaryBank' in data) || data.primaryBank is string) &&
+               (!('investmentStyle' in data) || data.investmentStyle is string) &&
+               (!('financialGoals' in data) || data.financialGoals is list);
       }
 
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidProfile(request.resource.data);
+      allow update: if isOwner(userId) && isValidProfile(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      // ===============================================================
+      // Transactions
+      // ===============================================================
+      match /transactions/{transactionId} {
+        function isValidTransaction(data) {
+          return data.keys().hasAll(['date', 'description', 'amount', 'category', 'type']) &&
+                 isValidDate(data.date) &&
+                 data.description is string && data.description.size() > 0 &&
+                 data.amount is number &&
+                 data.category is string &&
+                 data.type in ['income', 'expense'];
+        }
+
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow update: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // ===============================================================
+      // Chats
+      // ===============================================================
       match /chats/{chatId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidChatMessage(request.resource.data);
-        allow update: if isOwner(userId) && isValidChatMessage(request.resource.data);
-        allow delete: if isOwner(userId) || isAdmin();
+        function isValidChat(data) {
+          return data.keys().hasAll(['role', 'content', 'timestamp']) &&
+                 data.role in ['user', 'assistant'] &&
+                 data.content is string && data.content.size() > 0 &&
+                 isValidDateTime(data.timestamp);
+        }
+
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidChat(request.resource.data);
+        allow update: if isOwner(userId) && isValidChat(request.resource.data);
+        allow delete: if isOwner(userId);
       }
     }
   }

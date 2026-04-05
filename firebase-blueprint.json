@@ -1,63 +1,60 @@
 {
   "entities": {
-    "User": {
+    "UserProfile": {
       "title": "User Profile",
-      "description": "Stores user preferences and onboarding data.",
+      "description": "Stores user settings and onboarding data",
       "type": "object",
       "properties": {
-        "uid": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string", "format": "uri" },
         "incomeBracket": { "type": "string" },
-        "goals": { "type": "array", "items": { "type": "string" } },
-        "preferredLanguage": { "type": "string" },
-        "isZeroRetention": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "primaryBank": { "type": "string" },
+        "investmentStyle": { "type": "string" },
+        "financialGoals": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "email"]
+      "required": ["email", "incomeBracket"]
     },
     "Transaction": {
-      "title": "Financial Transaction",
-      "description": "A single financial transaction parsed from a statement.",
+      "title": "Transaction",
+      "description": "A single financial transaction",
       "type": "object",
       "properties": {
-        "userId": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "description": { "type": "string" },
         "amount": { "type": "number" },
-        "type": { "type": "string", "enum": ["credit", "debit"] },
         "category": { "type": "string" },
-        "subCategory": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
         "bank": { "type": "string" },
-        "rawDescription": { "type": "string" }
+        "raw": { "type": "string" }
       },
-      "required": ["userId", "date", "amount", "type"]
+      "required": ["date", "description", "amount", "category", "type"]
     },
     "ChatMessage": {
       "title": "Chat Message",
-      "description": "A message in a chat session.",
+      "description": "A message in the chat history",
       "type": "object",
       "properties": {
-        "userId": { "type": "string" },
-        "role": { "type": "string", "enum": ["user", "model"] },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
         "content": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "role", "content", "timestamp"]
+      "required": ["role", "content", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": "User",
-      "description": "User profile documents."
+      "schema": "UserProfile",
+      "description": "User profile document"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
-      "description": "Transactions for a specific user."
+      "description": "User's financial transactions"
     },
     "/users/{userId}/chats/{chatId}": {
       "schema": "ChatMessage",
-      "description": "Chat history for a specific user."
+      "description": "User's chat history"
     }
   }
 }

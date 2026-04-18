@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, Category, CATEGORIES } from "../types";
+import { Transaction, Category, CATEGORIES, ChatMessage } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -21,7 +21,7 @@ export async function categorizeTransactions(transactions: Partial<Transaction>[
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-flash-lite-preview",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -65,36 +65,86 @@ export async function getFinancialAdvice(
   query: string, 
   transactions: Transaction[], 
   profile: any,
-  history: { role: 'user' | 'model', content: string }[]
+  history: ChatMessage[]
 ) {
   const context = `
-    User Profile:
+    You are FinSathi, a premium AI financial concierge for the Indian market.
+    Your mission is to provide deeply personalized, actionable, and data-driven financial advice.
+
+    USER PROFILE:
+    - Name: ${profile.displayName}
     - Income Bracket: ${profile.incomeBracket}
     - Goals: ${profile.goals?.join(', ')}
-    - Language: ${profile.preferredLanguage}
+    - Preferred Language: ${profile.preferredLanguage}
     
-    Recent Transactions (Summary):
+    DATA CONTEXT:
+    Total Transactions Provided: ${transactions.length}
+    Recent Transactions (Last 50):
     ${JSON.stringify(transactions.slice(0, 50).map(t => ({ date: t.date, desc: t.description, amt: t.amount, type: t.type, cat: t.category })))}
     
-    Instructions:
-    - You are FinSathi, a helpful AI financial consultant for the Indian market.
-    - Provide data-grounded answers based on the user's transactions.
-    - Use Hinglish if the user asks in Hinglish or if preferred.
-    - Include a disclaimer: 'This is informational, not regulated financial advice.'
-    - Be concise and actionable.
+    STRICT GUIDELINES:
+    1. Answer in ${profile.preferredLanguage || 'English'}. If the user uses Hinglish, reply in polished Hinglish.
+    2. Be empathetic but objective. Use the user's data to back up your suggestions.
+    3. For budgeting, use the 50/30/20 rule adjusted for Indian middle-class context.
+    4. Mention specific Indian investment instruments like PPF, SIPs, ELSS, or FD/RD where relevant to their goals.
+    5. Always include this disclaimer: 'Mitr, this is AI-powered analysis for information only, not regulated financial advice. Consult a SEBI-registered advisor for investments.'
+    6. If asked about specific transactions, refer to their descriptions and amounts accurately.
+    7. Maintain a helpful, conversational "Sathi" (companion) tone.
   `;
 
+  // Map internal history to Gemini format
+  const formattedHistory = history.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }]
+  }));
+
   const chat = ai.chats.create({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3.1-pro-preview",
     config: {
       systemInstruction: context,
-    }
+    },
+    history: formattedHistory
   });
-
-  // Add history
-  // Note: sendMessage only takes a string message, so we might need to handle history differently if needed
-  // but for now let's just send the query.
   
   const response = await chat.sendMessage({ message: query });
   return response.text;
+}
+
+export async function getSmartInsights(transactions: Transaction[], profile: any) {
+  const prompt = `
+    Analyze these transactions and provide 2-3 specific, actionable financial insights for a user in India.
+    Consider their income bracket (${profile.incomeBracket}) and goals (${profile.goals?.join(', ')}).
+    
+    Transactions:
+    ${JSON.stringify(transactions.slice(0, 100).map(t => ({ date: t.date, desc: t.description, amt: t.amount, type: t.type, cat: t.category })))}
+    
+    Return the result as a JSON array of objects with "title", "description", and "type" (one of: "warning", "success", "info").
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ["warning", "success", "info"] }
+            },
+            required: ["title", "description", "type"]
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text || '[]');
+  } catch (error) {
+    console.error("Insights error:", error);
+    return [];
+  }
 }

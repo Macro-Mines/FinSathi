@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend 
@@ -9,24 +9,54 @@ import {
   ArrowLeft, 
   Sparkles, 
   TrendingDown,
-  Calendar
+  Calendar,
+  AlertTriangle,
+  Info as InfoIcon,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { Transaction, CATEGORIES } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { Transaction, CATEGORIES, UserProfile } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { useTheme } from '../ThemeContext';
+import { getSmartInsights } from '../services/gemini';
 
 interface InsightsProps {
   transactions: Transaction[];
+  profile: UserProfile;
   onBack?: () => void;
+}
+
+interface AIInsight {
+  title: string;
+  description: string;
+  type: 'warning' | 'success' | 'info';
 }
 
 const LIGHT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6'];
 const DARK_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6', '#22D3EE', '#FB923C', '#818CF8', '#2DD4BF'];
 
-export function Insights({ transactions, onBack }: InsightsProps) {
+export function Insights({ transactions, profile, onBack }: InsightsProps) {
   const { resolvedTheme } = useTheme();
   const COLORS = resolvedTheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchInsights() {
+      if (transactions.length === 0) return;
+      setIsLoading(true);
+      try {
+        const result = await getSmartInsights(transactions, profile);
+        setAiInsights(result);
+      } catch (error) {
+        console.error("AI Insights fetch failed:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchInsights();
+  }, [transactions, profile]);
 
   const stats = useMemo(() => {
     const categoryData = CATEGORIES.map(cat => ({
@@ -188,31 +218,56 @@ export function Insights({ transactions, onBack }: InsightsProps) {
 
       {/* Zone 5: AI Insights */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2 px-1">
-          <Sparkles className="w-4 h-4 text-brand-primary" />
-          <h3 className="text-sm font-bold text-text-primary">Smart Insights</h3>
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-brand-primary animate-pulse" />
+            <h3 className="text-sm font-bold text-text-primary">AI Smart Insights</h3>
+          </div>
+          {isLoading && <Loader2 className="w-3 h-3 animate-spin text-brand-primary" />}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="glass-card p-3 rounded-2xl border-glass-border flex gap-3">
-            <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-              <TrendingDown className="w-5 h-5 text-orange-500" />
-            </div>
-            <div>
-              <h4 className="text-[10px] font-bold text-text-primary">Subscription Leak</h4>
-              <p className="text-[9px] text-text-secondary mt-0.5 leading-tight">You have 3 active subscriptions totaling ₹2,499. One hasn't been used in 30 days.</p>
-            </div>
-          </div>
-
-          <div className="glass-card p-3 rounded-2xl border-glass-border flex gap-3">
-            <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Calendar className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <h4 className="text-[10px] font-bold text-text-primary">Savings Potential</h4>
-              <p className="text-[9px] text-text-secondary mt-0.5 leading-tight">Based on your current spending, you could save an extra ₹5,000 by optimizing food expenses.</p>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <AnimatePresence mode="popLayout">
+            {isLoading && aiInsights.length === 0 ? (
+              [1, 2].map((i) => (
+                <div key={i} className="glass-card p-3 rounded-2xl border-glass-border animate-pulse flex gap-3 h-20 items-center">
+                  <div className="w-10 h-10 bg-surface-raised rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-1/2 h-2 bg-surface-raised rounded" />
+                    <div className="w-full h-2 bg-surface-raised rounded" />
+                  </div>
+                </div>
+              ))
+            ) : aiInsights.length > 0 ? (
+              aiInsights.map((insight, idx) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="glass-card p-3 rounded-2xl border-glass-border flex gap-3 group hover:border-brand-primary/50 transition-all cursor-default"
+                >
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110",
+                    insight.type === 'warning' ? "bg-orange-500/10 text-orange-500" :
+                    insight.type === 'success' ? "bg-green-500/10 text-green-500" :
+                    "bg-blue-500/10 text-blue-500"
+                  )}>
+                    {insight.type === 'warning' ? <AlertTriangle className="w-5 h-5" /> :
+                     insight.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> :
+                     <InfoIcon className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold text-text-primary uppercase tracking-tight">{insight.title}</h4>
+                    <p className="text-[9px] text-text-secondary mt-1 leading-relaxed">{insight.description}</p>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="col-span-full py-8 text-center glass-card rounded-2xl border-glass-border">
+                <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">No AI Insights yet. Upload more data!</p>
+              </div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

@@ -248,7 +248,7 @@ function MainApp() {
                 />
               )}
               {activeTab === 'insights' && (
-                <Insights transactions={transactions} onBack={() => setActiveTab('home')} />
+                <Insights transactions={transactions} profile={profile} onBack={() => setActiveTab('home')} />
               )}
               {activeTab === 'profile' && (
                 <Settings onBack={() => setActiveTab('home')} onClearData={handleClearData} />
